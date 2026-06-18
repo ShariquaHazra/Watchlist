@@ -9,6 +9,10 @@ import (
 
 func Connect(connStr string) *sql.DB {
 
+	if connStr == "" {
+		log.Fatal("DATABASE_URL is missing")
+	}
+
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		log.Fatal(err)

@@ -17,7 +17,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	database := db.Connect(cfg.DBConnectionString())
+	database := db.Connect(cfg.DatabaseURL)
 	defer database.Close()
 
 	// Auth
@@ -101,6 +101,10 @@ func main() {
 port := os.Getenv("PORT")
 if port == "" {
 	port = cfg.ServerPort
+}
+
+if port == "" {
+	port = "8080"
 }
 
 log.Printf("Server running on port %s", port)
