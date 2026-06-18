@@ -44,7 +44,7 @@ func main() {
 	searchService := search.NewService(searchRepo)
 	searchHandler := search.NewHandler(searchService)
 
-/*	// Load CSV data on startup (background)
+	// Load CSV data on startup (background)
 	go func() {
 		log.Println("Loading CSV data from URL...")
 		stocks, err := csvhandler.ParseCSV(cfg.CSVURL)
@@ -61,7 +61,7 @@ func main() {
 		}
 		log.Printf("CSV loaded: %d stocks inserted/updated", inserted)
 	}()
-*/
+	
 	// ---------------- ROUTER ----------------
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
