@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-
+    "os"
 	"github.com/gin-gonic/gin"
 
 	"watchlist-backend/config"
@@ -61,7 +61,7 @@ func main() {
 		}
 		log.Printf("CSV loaded: %d stocks inserted/updated", inserted)
 	}()
-	
+
 	// ---------------- ROUTER ----------------
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -98,6 +98,11 @@ func main() {
 		protected.DELETE("/watchlists/:id/stocks/:stockId", watchlistHandler.RemoveStock)
 	}
 
-	log.Printf("Server running on port %s", cfg.ServerPort)
-	r.Run(":" + cfg.ServerPort)
+port := os.Getenv("PORT")
+if port == "" {
+	port = cfg.ServerPort
+}
+
+log.Printf("Server running on port %s", port)
+r.Run(":" + port)
 }
