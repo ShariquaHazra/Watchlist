@@ -19,27 +19,44 @@ func NewService(repo *Repository, jwtSecret string) *Service {
 }
 
 func (s *Service) Register(req *models.RegisterRequest) (*models.AuthResponse, error) {
-	// Password hash karo
+
+	// 1. check if user already exists
+	_, _, err := s.repo.GetUserByEmail(req.Email)
+	if err == nil {
+		return nil, errors.New("email already exists")
+	}
+
+	if err != nil && err.Error() != "user not found" {
+		return nil, err
+	}
+
+	// 2. hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 
+	// 3. create user
 	user := &models.User{
 		Name:  req.Name,
 		Email: req.Email,
 	}
 
-	if err := s.repo.CreateUser(user, string(hash)); err != nil {
-		return nil, errors.New("email already exists")
+	err = s.repo.CreateUser(user, string(hash))
+	if err != nil {
+		return nil, err
 	}
 
+	// 4. generate token
 	token, err := s.generateToken(user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.AuthResponse{Token: token, User: *user}, nil
+	return &models.AuthResponse{
+		Token: token,
+		User:  *user,
+	}, nil
 }
 
 func (s *Service) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
