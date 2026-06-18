@@ -70,7 +70,20 @@ func main() {
 	r.Use(middleware.CORSMiddleware())
 
 	api := r.Group("/api")
-
+    api.GET("/health", func(c *gin.Context) {
+		if err := database.Ping(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"db":     "disconnected",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "ok",
+			"db":        "connected",
+			"timestamp": time.Now(),
+		})
+	})
 	api.GET("/search/stocks", searchHandler.SearchStocks)
 
 	// Public Auth Routes
