@@ -10,14 +10,13 @@ import (
 	csvhandler "watchlist-backend/internal/csv"
 	"watchlist-backend/internal/db"
 	"watchlist-backend/internal/middleware"
+	"watchlist-backend/internal/search"
 	"watchlist-backend/internal/stock"
 	"watchlist-backend/internal/watchlist"
-	"watchlist-backend/internal/search"
 )
 
 func main() {
 	cfg := config.Load()
-
 	database := db.Connect(cfg.DBConnectionString())
 	defer database.Close()
 
@@ -39,13 +38,13 @@ func main() {
 	// CSV
 	csvRepo := csvhandler.NewRepository(database)
 	csvHandler := csvhandler.NewHandler(csvRepo, cfg.CSVURL)
-    
-	//search
-    searchRepo := search.NewRepository(database)
-    searchService := search.NewService(searchRepo)
-    searchHandler := search.NewHandler(searchService)
 
-	// Server start hote hi CSV load karo
+	// Search
+	searchRepo := search.NewRepository(database)
+	searchService := search.NewService(searchRepo)
+	searchHandler := search.NewHandler(searchService)
+
+	// Load CSV data on startup (background)
 	go func() {
 		log.Println("Loading CSV data from URL...")
 		stocks, err := csvhandler.ParseCSV(cfg.CSVURL)
@@ -63,18 +62,16 @@ func main() {
 		log.Printf("CSV loaded: %d stocks inserted/updated", inserted)
 	}()
 
-	// Router
+	// ---------------- ROUTER ----------------
 	r := gin.Default()
 
-	// CORS Middleware
+	// CORS must be registered before any routes
 	r.Use(middleware.CORSMiddleware())
 
-	r.OPTIONS("/*path", func(c *gin.Context) {
-		c.Status(204)
-	})
-
 	api := r.Group("/api")
-    api.GET("/search/stocks", searchHandler.SearchStocks)
+
+	api.GET("/search/stocks", searchHandler.SearchStocks)
+
 	// Public Auth Routes
 	authRoutes := api.Group("/auth")
 	{
