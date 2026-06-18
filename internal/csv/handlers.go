@@ -18,32 +18,35 @@ func NewHandler(repo *Repository, csvURL string) *Handler {
 
 // POST /api/stocks/import
 func (h *Handler) ImportCSV(c *gin.Context) {
-	stocks, err := ParseCSV(h.csvURL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.Response{
-			Success: false,
-			Message: "failed to parse CSV: " + err.Error(),
-		})
-		return
-	}
 
-	inserted := 0
-	failed := 0
-	for _, stock := range stocks {
-		if err := h.repo.UpsertStock(&stock); err != nil {
-			failed++
-			continue
+	// 🚀 return immediately
+	go func() {
+		stocks, err := ParseCSV(h.csvURL)
+		if err != nil {
+			return
 		}
-		inserted++
-	}
 
+		inserted := 0
+		failed := 0
+
+		for _, stock := range stocks {
+			if err := h.repo.UpsertStock(&stock); err != nil {
+				failed++
+				continue
+			}
+			inserted++
+		}
+
+		// log result in server logs
+		log.Printf("CSV done: inserted=%d failed=%d", inserted, failed)
+	}()
+
+	// 🚀 instant response (IMPORTANT)
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,
-		Message: "CSV imported successfully",
+		Message: "CSV import started in background",
 		Data: gin.H{
-			"total_processed":  len(stocks),
-			"inserted_updated": inserted,
-			"failed":           failed,
+			"status": "processing",
 		},
 	})
 }
