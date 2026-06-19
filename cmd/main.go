@@ -1,11 +1,13 @@
 package main
 
 import (
-	"net/http"
-    "time"
+	"encoding/json"
 	"log"
-    "os"
-	"github.com/gin-gonic/gin"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/gorilla/mux"
 
 	"watchlist-backend/config"
 	"watchlist-backend/internal/auth"
@@ -19,34 +21,35 @@ import (
 
 func main() {
 	cfg := config.Load()
+
 	database := db.Connect(cfg.DatabaseURL)
 	defer database.Close()
 
-	// Auth
+	// ── Auth ──────────────────────────────────
 	authRepo := auth.NewRepository(database)
 	authService := auth.NewService(authRepo, cfg.JWTSecret)
 	authHandler := auth.NewHandler(authService)
 
-	// Watchlist
+	// ── Watchlist ─────────────────────────────
 	watchlistRepo := watchlist.NewRepository(database)
 	watchlistService := watchlist.NewService(watchlistRepo)
 	watchlistHandler := watchlist.NewHandler(watchlistService)
 
-	// Stock
+	// ── Stock ─────────────────────────────────
 	stockRepo := stock.NewRepository(database)
 	stockService := stock.NewService(stockRepo)
 	stockHandler := stock.NewHandler(stockService)
 
-	// CSV
+	// ── CSV ───────────────────────────────────
 	csvRepo := csvhandler.NewRepository(database)
 	csvHandler := csvhandler.NewHandler(csvRepo, cfg.CSVURL)
 
-	// Search
+	// ── Search ────────────────────────────────
 	searchRepo := search.NewRepository(database)
 	searchService := search.NewService(searchRepo)
 	searchHandler := search.NewHandler(searchService)
 
-	// Load CSV data on startup (background)
+	// ── CSV Auto Load ─────────────────────────
 	go func() {
 		log.Println("Loading CSV data from URL...")
 		stocks, err := csvhandler.ParseCSV(cfg.CSVURL)
@@ -55,8 +58,8 @@ func main() {
 			return
 		}
 		inserted := 0
-		for _, stock := range stocks {
-			if err := csvRepo.UpsertStock(&stock); err != nil {
+		for _, s := range stocks {
+			if err := csvRepo.UpsertStock(&s); err != nil {
 				continue
 			}
 			inserted++
@@ -64,64 +67,66 @@ func main() {
 		log.Printf("CSV loaded: %d stocks inserted/updated", inserted)
 	}()
 
-	// ---------------- ROUTER ----------------
-	r := gin.Default()
-	r.SetTrustedProxies(nil)
+	// ── Router ────────────────────────────────
+	r := mux.NewRouter()
 
-	// CORS must be registered before any routes
-	r.Use(middleware.CORSMiddleware())
+	// CORS Middleware — sab routes pe
+	r.Use(middleware.CORSMiddleware)
 
-	api := r.Group("/api")
-    api.GET("/health", func(c *gin.Context) {
+	// OPTIONS preflight
+	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}).Methods("OPTIONS")
+
+	api := r.PathPrefix("/api").Subrouter()
+
+	// ── Health Check ──────────────────────────
+	api.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		if err := database.Ping(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "error",
 				"db":     "disconnected",
 			})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":    "ok",
 			"db":        "connected",
 			"timestamp": time.Now(),
 		})
-	})
-	api.GET("/search/stocks", searchHandler.SearchStocks)
+	}).Methods("GET")
 
-	// Public Auth Routes
-	authRoutes := api.Group("/auth")
-	{
-		authRoutes.POST("/register", authHandler.Register)
-		authRoutes.POST("/login", authHandler.Login)
-	}
+	// ── Public Routes ─────────────────────────
+	api.HandleFunc("/auth/register", authHandler.Register).Methods("POST")
+	api.HandleFunc("/auth/login", authHandler.Login).Methods("POST")
+	api.HandleFunc("/stocks/import", csvHandler.ImportCSV).Methods("POST")
+	api.HandleFunc("/search/stocks", searchHandler.SearchStocks).Methods("GET")
 
 	// Stock Routes
-	stockHandler.RegisterRoutes(api)
+	stockHandler.RegisterRoutes(r)
 
-	// CSV Import Route
-	api.POST("/stocks/import", csvHandler.ImportCSV)
-
-	// Protected Routes
-	protected := api.Group("/")
+	// ── Protected Routes ──────────────────────
+	protected := api.PathPrefix("/").Subrouter()
 	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
-	{
-		protected.POST("/watchlists", watchlistHandler.Create)
-		protected.GET("/watchlists", watchlistHandler.GetAll)
-		protected.DELETE("/watchlists/:id", watchlistHandler.Delete)
-		protected.GET("/watchlists/:id/stocks", watchlistHandler.GetStocks)
-		protected.POST("/watchlists/:id/stocks", watchlistHandler.AddStock)
-		protected.DELETE("/watchlists/:id/stocks/:stockId", watchlistHandler.RemoveStock)
+
+	protected.HandleFunc("/watchlists", watchlistHandler.Create).Methods("POST")
+	protected.HandleFunc("/watchlists", watchlistHandler.GetAll).Methods("GET")
+	protected.HandleFunc("/watchlists/{id}", watchlistHandler.Delete).Methods("DELETE")
+	protected.HandleFunc("/watchlists/{id}/stocks", watchlistHandler.GetStocks).Methods("GET")
+	protected.HandleFunc("/watchlists/{id}/stocks", watchlistHandler.AddStock).Methods("POST")
+	protected.HandleFunc("/watchlists/{id}/stocks/{stockId}", watchlistHandler.RemoveStock).Methods("DELETE")
+
+	// ── Server Start ──────────────────────────
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = cfg.ServerPort
 	}
-
-port := os.Getenv("PORT")
-if port == "" {
-	port = cfg.ServerPort
-}
-
-if port == "" {
-	port = "8080"
-}
-
-log.Printf("Server running on port %s", port)
-r.Run(":" + port)
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Server running on port %s", port)
+	http.ListenAndServe(":"+port, r)
 }

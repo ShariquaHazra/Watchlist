@@ -1,10 +1,13 @@
 package watchlist
 
 import (
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"watchlist-backend/pkg/models"
+	"watchlist-backend/pkg/validator"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
@@ -15,44 +18,58 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
 // POST /api/watchlists
-// POST /api/watchlists
-func (h *Handler) Create(c *gin.Context) {
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+
 	var req models.CreateWatchlistRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
-			Message: err.Error(),
+			Message: "invalid request body",
 		})
 		return
 	}
 
-	// JWT se user_id lo — query param nahi
-	userID := c.GetInt("user_id")
+	// Validation
+	if errs := validator.Validate(req); len(errs) > 0 {
+		writeJSON(w, http.StatusBadRequest, models.Response{
+			Success: false,
+			Message: "validation failed",
+			Data:    errs,
+		})
+		return
+	}
 
-	w, err := h.service.CreateWatchlist(userID, req.Name)
+	wl, err := h.service.CreateWatchlist(userID, req.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: "failed to create watchlist",
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, models.Response{
+	writeJSON(w, http.StatusCreated, models.Response{
 		Success: true,
 		Message: "watchlist created successfully",
-		Data:    w,
+		Data:    wl,
 	})
 }
 
 // GET /api/watchlists
-func (h *Handler) GetAll(c *gin.Context) {
-	userID := c.GetInt("user_id") // ← JWT se aata hai
+func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
 
 	watchlists, err := h.service.GetWatchlists(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: "failed to fetch watchlists",
 		})
@@ -63,21 +80,21 @@ func (h *Handler) GetAll(c *gin.Context) {
 		watchlists = []models.Watchlist{}
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "watchlists fetched successfully",
 		Data:    watchlists,
 	})
 }
 
-// DELETE /api/watchlists/:id
-func (h *Handler) Delete(c *gin.Context) {
-	watchlistIDStr := c.Param("id")
-	userID := c.GetInt("user_id") // ← JWT se
+// DELETE /api/watchlists/{id}
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+	vars := mux.Vars(r)
 
-	watchlistID, err := ParseInt(watchlistIDStr)
+	watchlistID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: "invalid watchlist id",
 		})
@@ -86,40 +103,40 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	if err := h.service.DeleteWatchlist(userID, watchlistID); err != nil {
 		if err.Error() == "unauthorized" {
-			c.JSON(http.StatusForbidden, models.Response{
+			writeJSON(w, http.StatusForbidden, models.Response{
 				Success: false,
 				Message: "unauthorized",
 			})
 			return
 		}
 		if err.Error() == "watchlist not found" {
-			c.JSON(http.StatusNotFound, models.Response{
+			writeJSON(w, http.StatusNotFound, models.Response{
 				Success: false,
 				Message: "watchlist not found",
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "watchlist deleted successfully",
 	})
 }
 
-// GET /api/watchlists/:id/stocks
-func (h *Handler) GetStocks(c *gin.Context) {
-	watchlistIDStr := c.Param("id")
-	userID := c.GetInt("user_id") // ← JWT se
+// GET /api/watchlists/{id}/stocks
+func (h *Handler) GetStocks(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+	vars := mux.Vars(r)
 
-	watchlistID, err := ParseInt(watchlistIDStr)
+	watchlistID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: "invalid watchlist id",
 		})
@@ -129,20 +146,20 @@ func (h *Handler) GetStocks(c *gin.Context) {
 	items, err := h.service.GetStocks(userID, watchlistID)
 	if err != nil {
 		if err.Error() == "unauthorized" {
-			c.JSON(http.StatusForbidden, models.Response{
+			writeJSON(w, http.StatusForbidden, models.Response{
 				Success: false,
 				Message: "unauthorized",
 			})
 			return
 		}
 		if err.Error() == "watchlist not found" {
-			c.JSON(http.StatusNotFound, models.Response{
+			writeJSON(w, http.StatusNotFound, models.Response{
 				Success: false,
 				Message: "watchlist not found",
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -153,21 +170,21 @@ func (h *Handler) GetStocks(c *gin.Context) {
 		items = []models.WatchlistItem{}
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "stocks fetched successfully",
 		Data:    items,
 	})
 }
 
-// POST /api/watchlists/:id/stocks
-func (h *Handler) AddStock(c *gin.Context) {
-	watchlistIDStr := c.Param("id")
-	userID := c.GetInt("user_id") // ← JWT se
+// POST /api/watchlists/{id}/stocks
+func (h *Handler) AddStock(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+	vars := mux.Vars(r)
 
-	watchlistID, err := ParseInt(watchlistIDStr)
+	watchlistID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: "invalid watchlist id",
 		})
@@ -175,67 +192,76 @@ func (h *Handler) AddStock(c *gin.Context) {
 	}
 
 	var req models.AddStockRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
-			Message: err.Error(),
+			Message: "invalid request body",
+		})
+		return
+	}
+
+	// Validation
+	if errs := validator.Validate(req); len(errs) > 0 {
+		writeJSON(w, http.StatusBadRequest, models.Response{
+			Success: false,
+			Message: "validation failed",
+			Data:    errs,
 		})
 		return
 	}
 
 	if err := h.service.AddStock(userID, watchlistID, req.StockID); err != nil {
 		if err.Error() == "unauthorized" {
-			c.JSON(http.StatusForbidden, models.Response{
+			writeJSON(w, http.StatusForbidden, models.Response{
 				Success: false,
 				Message: "unauthorized",
 			})
 			return
 		}
 		if err.Error() == "watchlist not found" {
-			c.JSON(http.StatusNotFound, models.Response{
+			writeJSON(w, http.StatusNotFound, models.Response{
 				Success: false,
 				Message: "watchlist not found",
 			})
 			return
 		}
 		if err.Error() == "stock already in watchlist" {
-			c.JSON(http.StatusBadRequest, models.Response{
+			writeJSON(w, http.StatusBadRequest, models.Response{
 				Success: false,
 				Message: "stock already in watchlist",
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, models.Response{
+	writeJSON(w, http.StatusCreated, models.Response{
 		Success: true,
 		Message: "stock added to watchlist successfully",
 	})
 }
 
-// DELETE /api/watchlists/:id/stocks/:stockId
-func (h *Handler) RemoveStock(c *gin.Context) {
-	watchlistIDStr := c.Param("id")
-	stockIDStr := c.Param("stockId")
-	userID := c.GetInt("user_id") // ← JWT se
+// DELETE /api/watchlists/{id}/stocks/{stockId}
+func (h *Handler) RemoveStock(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+	vars := mux.Vars(r)
 
-	watchlistID, err := ParseInt(watchlistIDStr)
+	watchlistID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: "invalid watchlist id",
 		})
 		return
 	}
 
-	stockID, err := ParseInt(stockIDStr)
+	stockID, err := strconv.Atoi(vars["stockId"])
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: "invalid stock id",
 		})
@@ -244,27 +270,27 @@ func (h *Handler) RemoveStock(c *gin.Context) {
 
 	if err := h.service.RemoveStock(userID, watchlistID, stockID); err != nil {
 		if err.Error() == "unauthorized" {
-			c.JSON(http.StatusForbidden, models.Response{
+			writeJSON(w, http.StatusForbidden, models.Response{
 				Success: false,
 				Message: "unauthorized",
 			})
 			return
 		}
 		if err.Error() == "watchlist not found" {
-			c.JSON(http.StatusNotFound, models.Response{
+			writeJSON(w, http.StatusNotFound, models.Response{
 				Success: false,
 				Message: "watchlist not found",
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "stock removed successfully",
 	})

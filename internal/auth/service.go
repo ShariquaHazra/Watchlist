@@ -26,7 +26,7 @@ func (s *Service) Register(req *models.RegisterRequest) (*models.AuthResponse, e
 		return nil, errors.New("email already exists")
 	}
 
-	if err != nil && err.Error() != "user not found" {
+	if err.Error() != "user not found" {
 		return nil, err
 	}
 

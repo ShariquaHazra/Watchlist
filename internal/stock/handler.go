@@ -1,21 +1,21 @@
 package stock
 
 import (
+	"encoding/json"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-
 	"watchlist-backend/pkg/models"
+
+	"github.com/gorilla/mux"
 )
 
 type StockResponse struct {
-	ID           int     `json:"id"`
-	Symbol       string  `json:"symbol"`
-	CompanyName  string  `json:"company_name"`
-	Exchange     string  `json:"exchange"`
-	CurrentPrice float64 `json:"ltp"`
-	Sector       string  `json:"sector,omitempty"`
-	LastUpdated  string  `json:"last_updated"`
+	ID          int     `json:"id"`
+	Symbol      string  `json:"symbol"`
+	CompanyName string  `json:"company_name"`
+	Exchange    string  `json:"exchange"`
+	LTP         float64 `json:"ltp"`
+	LastUpdated string  `json:"last_updated"`
 }
 
 type Handler struct {
@@ -26,33 +26,35 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
 func toStockResponse(s models.Stock) StockResponse {
 	return StockResponse{
-		ID:           s.ID,
-		Symbol:       s.Symbol,
-		CompanyName:  s.CompanyName,
-		Exchange:     s.Exchange,
-		CurrentPrice: s.LTP,
-		LastUpdated:  s.LastUpdated.Format("2006-01-02 15:04:05"),
+		ID:          s.ID,
+		Symbol:      s.Symbol,
+		CompanyName: s.CompanyName,
+		Exchange:    s.Exchange,
+		LTP:         s.LTP,
+		LastUpdated: s.LastUpdated.Format("2006-01-02 15:04:05"),
 	}
 }
 
-func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
-	stocks := rg.Group("/stocks")
-	{
-		stocks.POST("", h.CreateStock)
-		stocks.GET("", h.GetAllStocks)
-		stocks.GET("/:id", h.GetStockByID)
-		stocks.PUT("/:id", h.UpdateStock)
-		stocks.DELETE("/:id", h.DeleteStock)
-	}
+func (h *Handler) RegisterRoutes(r *mux.Router) {
+	r.HandleFunc("/stocks", h.CreateStock).Methods("POST")
+	r.HandleFunc("/stocks", h.GetAllStocks).Methods("GET")
+	r.HandleFunc("/stocks/{id}", h.GetStockByID).Methods("GET")
+	r.HandleFunc("/stocks/{id}", h.UpdateStock).Methods("PUT")
+	r.HandleFunc("/stocks/{id}", h.DeleteStock).Methods("DELETE")
 }
 
-func (h *Handler) CreateStock(c *gin.Context) {
+func (h *Handler) CreateStock(w http.ResponseWriter, r *http.Request) {
 	var stock models.Stock
-
-	if err := c.ShouldBindJSON(&stock); err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+	if err := json.NewDecoder(r.Body).Decode(&stock); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -60,25 +62,24 @@ func (h *Handler) CreateStock(c *gin.Context) {
 	}
 
 	if err := h.service.CreateStock(&stock); err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, models.Response{
+	writeJSON(w, http.StatusCreated, models.Response{
 		Success: true,
 		Message: "stock created successfully",
 		Data:    toStockResponse(stock),
 	})
 }
 
-func (h *Handler) GetAllStocks(c *gin.Context) {
+func (h *Handler) GetAllStocks(w http.ResponseWriter, r *http.Request) {
 	stocks, err := h.service.GetAllStocks()
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -86,45 +87,42 @@ func (h *Handler) GetAllStocks(c *gin.Context) {
 	}
 
 	var response []StockResponse
-
 	for _, s := range stocks {
 		response = append(response, toStockResponse(s))
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "stocks fetched successfully",
 		Data:    response,
 	})
 }
 
-func (h *Handler) GetStockByID(c *gin.Context) {
-	id := c.Param("id")
+func (h *Handler) GetStockByID(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
 
 	stock, err := h.service.GetStockByID(id)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.Response{
+		writeJSON(w, http.StatusNotFound, models.Response{
 			Success: false,
 			Message: "stock not found",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "stock fetched successfully",
 		Data:    toStockResponse(*stock),
 	})
 }
 
-func (h *Handler) UpdateStock(c *gin.Context) {
-	id := c.Param("id")
+func (h *Handler) UpdateStock(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
 
 	var stock models.Stock
-
-	if err := c.ShouldBindJSON(&stock); err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+	if err := json.NewDecoder(r.Body).Decode(&stock); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
@@ -132,32 +130,32 @@ func (h *Handler) UpdateStock(c *gin.Context) {
 	}
 
 	if err := h.service.UpdateStock(id, &stock); err != nil {
-		c.JSON(http.StatusBadRequest, models.Response{
+		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "stock updated successfully",
 		Data:    toStockResponse(stock),
 	})
 }
 
-func (h *Handler) DeleteStock(c *gin.Context) {
-	id := c.Param("id")
+func (h *Handler) DeleteStock(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
 
 	if err := h.service.DeleteStock(id); err != nil {
-		c.JSON(http.StatusInternalServerError, models.Response{
+		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.Response{
+	writeJSON(w, http.StatusOK, models.Response{
 		Success: true,
 		Message: "stock deleted successfully",
 	})
