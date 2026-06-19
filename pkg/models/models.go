@@ -64,9 +64,9 @@ type WatchlistItem struct {
 
 // ── Request DTOs with Validations ─────────────────────
 type RegisterRequest struct {
-	Name     string `json:"name"     validate:"required,min=2,max=50"`
+	Name     string `json:"name"     validate:"required,min=2,max=50,no_only_spaces,valid_name"`
 	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6,max=100"`
+	Password string `json:"password" validate:"required,min=8,max=100,strong_password"`
 }
 
 type LoginRequest struct {
@@ -74,17 +74,17 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
-type AuthResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
-}
-
 type CreateWatchlistRequest struct {
-	Name string `json:"name" validate:"required,min=1,max=100"`
+	Name string `json:"name" validate:"required,min=1,max=100,no_only_spaces,valid_name"`
 }
 
 type AddStockRequest struct {
 	StockID int `json:"stock_id" validate:"required,min=1"`
+}
+
+type AuthResponse struct {
+	Token string `json:"token"`
+	User  User   `json:"user"`
 }
 
 // ── Standard Response ─────────────────────────────────

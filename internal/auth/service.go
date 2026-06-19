@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"strings"
 	"time"
 	"watchlist-backend/pkg/models"
 
@@ -19,6 +20,9 @@ func NewService(repo *Repository, jwtSecret string) *Service {
 }
 
 func (s *Service) Register(req *models.RegisterRequest) (*models.AuthResponse, error) {
+
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Name = strings.TrimSpace(req.Name)
 
 	// 1. check if user already exists
 	_, _, err := s.repo.GetUserByEmail(req.Email)
@@ -60,6 +64,9 @@ func (s *Service) Register(req *models.RegisterRequest) (*models.AuthResponse, e
 }
 
 func (s *Service) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
+
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+
 	user, passwordHash, err := s.repo.GetUserByEmail(req.Email)
 	if err != nil {
 		return nil, errors.New("invalid email or password")

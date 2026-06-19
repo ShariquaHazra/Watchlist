@@ -49,9 +49,16 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	wl, err := h.service.CreateWatchlist(userID, req.Name)
 	if err != nil {
+		if err.Error() == "watchlist with this name already exists" {
+			writeJSON(w, http.StatusInternalServerError, models.Response{
+				Success: false,
+				Message: err.Error(),
+			})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
-			Message: "failed to create watchlist",
+			Message: err.Error(), // ← "failed to create watchlist" ki jagah actual error
 		})
 		return
 	}

@@ -14,6 +14,18 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
+// Same user ki same name ki watchlist exist karti hai?
+func (r *Repository) ExistsByName(userID int, name string) (bool, error) {
+	query := `
+		SELECT COUNT(*) FROM watchlists
+		WHERE user_id = $1
+		AND LOWER(TRIM(name)) = LOWER(TRIM($2))
+	`
+	var count int
+	err := r.db.QueryRow(query, userID, name).Scan(&count)
+	return count > 0, err
+}
+
 func (r *Repository) Create(w *models.Watchlist) error {
 	query := `
 		INSERT INTO watchlists (user_id, name, created_at)

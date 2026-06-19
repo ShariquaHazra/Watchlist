@@ -3,6 +3,7 @@ package watchlist
 import (
 	"errors"
 	"strconv"
+	"strings"
 	"watchlist-backend/pkg/models"
 )
 
@@ -15,6 +16,13 @@ func NewService(repo *Repository) *Service {
 }
 
 func (s *Service) CreateWatchlist(userID int, name string) (*models.Watchlist, error) {
+	exists, err := s.repo.ExistsByName(userID, strings.TrimSpace(name))
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, errors.New("watchlist with this name already exists")
+	}
 	w := &models.Watchlist{
 		UserID: userID,
 		Name:   name,
