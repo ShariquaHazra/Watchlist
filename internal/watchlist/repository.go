@@ -81,7 +81,14 @@ func (r *Repository) GetStocks(watchlistID int) ([]models.WatchlistItem, error) 
 	query := `
 		SELECT
 			wi.id, wi.watchlist_id, wi.stock_id, wi.added_at,
-			s.id, s.symbol, s.company_name, s.exchange, s.LTP, s.last_updated
+			s.id, s.exchange_instrument_id, s.segment, s.instrument_type,
+			s.symbol, s.display_name, s.company_name, s.isin, s.series,
+			s.exchange, s.contract_expiration, s.strike, s.option_type,
+			s.underlying_symbol_id, s.underlying_symbol, s.lot_size,
+			s.tick_size, s.upper_circuit, s.lower_circuit, s.freeze_qty,
+			s.description, s.ltp, s.open, s.high, s.low, s.close,
+			s.vol, s.oi, s.bid, s.ask, s.bid_qty, s.ask_qty,
+			s.cautionary_message_info, s.last_updated
 		FROM watchlist_items wi
 		JOIN stocks s ON s.id = wi.stock_id
 		WHERE wi.watchlist_id = $1
@@ -99,8 +106,14 @@ func (r *Repository) GetStocks(watchlistID int) ([]models.WatchlistItem, error) 
 		var stock models.Stock
 		err := rows.Scan(
 			&item.ID, &item.WatchlistID, &item.StockID, &item.AddedAt,
-			&stock.ID, &stock.Symbol, &stock.CompanyName,
-			&stock.Exchange, &stock.LTP, &stock.LastUpdated,
+			&stock.ID, &stock.ExchangeInstrumentID, &stock.Segment, &stock.InstrumentType,
+			&stock.Symbol, &stock.DisplayName, &stock.CompanyName, &stock.ISIN, &stock.Series,
+			&stock.Exchange, &stock.ContractExpiration, &stock.Strike, &stock.OptionType,
+			&stock.UnderlyingSymbolID, &stock.UnderlyingSymbol, &stock.LotSize,
+			&stock.TickSize, &stock.UpperCircuit, &stock.LowerCircuit, &stock.FreezeQty,
+			&stock.Description, &stock.LTP, &stock.Open, &stock.High, &stock.Low, &stock.Close,
+			&stock.Vol, &stock.OI, &stock.Bid, &stock.Ask, &stock.BidQty, &stock.AskQty,
+			&stock.CautionaryMessageInfo, &stock.LastUpdated,
 		)
 		if err != nil {
 			return nil, err
