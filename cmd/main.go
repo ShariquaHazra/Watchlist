@@ -14,6 +14,7 @@ import (
 	csvhandler "watchlist-backend/internal/csv"
 	"watchlist-backend/internal/db"
 	"watchlist-backend/internal/middleware"
+	"watchlist-backend/internal/realtime"
 	"watchlist-backend/internal/search"
 	"watchlist-backend/internal/stock"
 	"watchlist-backend/internal/watchlist"
@@ -49,6 +50,15 @@ func main() {
 	searchService := search.NewService(searchRepo)
 	searchHandler := search.NewHandler(searchService)
 
+	// ── Realtime WebSocket ─────────────────────
+	hub := realtime.NewHub()
+	wsHandler := realtime.NewHandler(hub, database, cfg.JWTSecret)
+	priceBroadcaster := realtime.NewPriceBroadcaster(hub, database)
+
+	// ── Background Tasks ──────────────────────
+	go hub.Run()
+	go priceBroadcaster.Start()
+
 	// ── CSV Auto Load ─────────────────────────
 	go func() {
 		log.Println("Loading CSV data from URL...")
@@ -70,8 +80,11 @@ func main() {
 	// ── Router ────────────────────────────────
 	r := mux.NewRouter()
 
-	// CORS Middleware — sab routes pe
+	// CORS Middleware
 	r.Use(middleware.CORSMiddleware)
+
+	// ── WebSocket — SABSE PEHLE ───────────────
+	r.HandleFunc("/ws", wsHandler.ServeWS)
 
 	// OPTIONS preflight
 	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +119,7 @@ func main() {
 	api.HandleFunc("/search/stocks", searchHandler.SearchStocks).Methods("GET")
 
 	// Stock Routes
-	stockHandler.RegisterRoutes(r)
+	stockHandler.RegisterRoutes(api)
 
 	// ── Protected Routes ──────────────────────
 	protected := api.PathPrefix("/").Subrouter()
@@ -128,5 +141,6 @@ func main() {
 		port = "8080"
 	}
 	log.Printf("Server running on port %s", port)
+	log.Printf("WebSocket: ws://localhost:%s/ws?token=JWT_TOKEN", port)
 	http.ListenAndServe(":"+port, r)
 }
