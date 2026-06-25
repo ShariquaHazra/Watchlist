@@ -1,0 +1,2 @@
+ALTER TABLE stocks
+ADD COLUMN sector VARCHAR(100);
