@@ -53,7 +53,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			time.Since(start),
 			r.RemoteAddr,
 			r.Method,
-			r.RequestURI,
+			r.URL.Path,
 		)
 	})
 }
