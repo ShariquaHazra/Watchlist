@@ -2,14 +2,14 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
+	"encoding/json" 
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/gorilla/mux" // HTTP router — matches URLs to handlers
 
 	"watchlist-backend/config"
 	"watchlist-backend/internal/auth"
@@ -45,7 +45,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
-		next.ServeHTTP(sw, r)
+		next.ServeHTTP(sw, r)//call actual handler
 
 		log.Printf("[MUX] %s | %3d | %13v | %15s | %-7s %q",
 			time.Now().Format("2006/01/02 - 15:04:05"),
@@ -61,7 +61,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 func main() {
 	cfg := config.Load()
 
-	dbConn := db.Connect(cfg.DatabaseURL)
+	dbConn := db.Connect(cfg.DatabaseURL)//Ye database se connection banata hai.
 	defer dbConn.Close()
 
 	// ── Auth ─────────────────────────
@@ -95,7 +95,7 @@ func main() {
 		stocks, err := csvhandler.ParseCSV(cfg.CSVURL)
 		if err != nil {
 			log.Printf("CSV load error: %v", err)
-			return
+			return //go routine ko terminate kar deta hai agar error aata hai.
 		}
 
 		inserted := 0
@@ -149,7 +149,7 @@ func main() {
 	api.HandleFunc("/stocks/import", csvHandler.ImportCSV).Methods("POST")
 	api.HandleFunc("/search/stocks", searchHandler.SearchStocks).Methods("GET")
 
-	stockHandler.RegisterRoutes(api)
+	stockHandler.RegisterRoutes(api)// Register stock-related routes
 
 	// ── WebSocket ─────────────────────
 	api.HandleFunc("/ws/market", marketSvc.ServeWS).Methods("GET")
@@ -166,7 +166,7 @@ func main() {
 	protected.HandleFunc("/watchlists/{id}/stocks", watchlistHandler.AddStock).Methods("POST")
 	protected.HandleFunc("/watchlists/{id}/stocks/{stockId}", watchlistHandler.RemoveStock).Methods("DELETE")
 
-	// ── MARKET APIs (MANUAL SUBSCRIBE) ─
+	// ── MARKET APIs ( SUBSCRIBE) ─
 	protected.HandleFunc("/market/subscribe", marketSvc.HandleSubscribe).Methods("POST")
 	protected.HandleFunc("/market/unsubscribe", marketSvc.HandleUnsubscribe).Methods("POST")
 	protected.HandleFunc("/market/quotes", marketSvc.HandleQuotes).Methods("POST")

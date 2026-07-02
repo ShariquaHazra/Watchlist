@@ -1,3 +1,7 @@
+/*
+This package implements a market data service that generates random ticks for subscribed instruments and sends them to connected clients via WebSocket.
+It also provides HTTP endpoints for subscribing/unsubscribing to instruments, getting the status of the service, and fetching quotes for specific instruments.
+*/
 package market
 
 import (
@@ -16,7 +20,7 @@ type Service struct {
 	jwtSecret string
 }
 
-func NewService(secret string) *Service {
+func NewService(secret string) *Service {//called from main.go to create market service
 
 	h := newHub()
 	c := newClient(h)
@@ -29,7 +33,7 @@ func NewService(secret string) *Service {
 	}
 }
 
-func (s *Service) Start() {
+func (s *Service) Start() {// Starts the market service by running the hub and starting the client.
 	go s.hub.run()
 	s.client.Start()
 	log.Println("[market] service started")

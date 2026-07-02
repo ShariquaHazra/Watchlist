@@ -1,3 +1,7 @@
+/*Handles market data generation and user subscriptions.
+Stores which user subscribed to which instruments.
+Generates ticks periodically and sends them to Hub.*/
+
 package market
 
 import (
@@ -40,33 +44,33 @@ type Client struct {
 	hub *Hub
 }
 
-func newClient(h *Hub) *Client {
+func newClient(h *Hub) *Client {//called from market.NewService() in service.go
 	return &Client{
-		subs: make(map[int]map[instrument]*Tick),
+		subs: make(map[int]map[instrument]*Tick),//Creates empty subscription storage.
 		stop: make(chan struct{}),
-		hub: h,
+		hub: h,//Connects client with websocket hub.
 	}
 }
 
-func (c *Client) Start() {
+func (c *Client) Start() {//market. engine start krta h and is called from main marketSvc.Start()
 	go c.tickLoop()
 	log.Println("[client] tick generator started")
 }
 
-func (c *Client) Stop() {
-	close(c.stop)
+func (c *Client) Stop() {//Stops market engine.
+	close(c.stop) 
 }
 
 func (c *Client) Subscribe(userID int, instruments []instrument) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.Lock()//Lock krta hai subscription map.
+	defer c.mu.Unlock() //After finishing unlock.
 
-	if c.subs[userID] == nil {
-		c.subs[userID] = make(map[instrument]*Tick)
+	if c.subs[userID] == nil {//Checks whether this user already has a subscription map.
+		c.subs[userID] = make(map[instrument]*Tick)//Create user's stock list.
 	}
 
 	for _, ins := range instruments {
-		c.subs[userID][ins] = nil
+		c.subs[userID][ins] = nil//User subscribed but no tick generated yet.
 	}
 }
 
@@ -100,7 +104,7 @@ func (c *Client) ActiveCount() int {
 
 func (c *Client) tickLoop() {
 	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	defer ticker.Stop() //Ensures the ticker is stopped once the function returns
 
 	for {
 		select {
@@ -111,7 +115,7 @@ func (c *Client) tickLoop() {
 		case <-ticker.C:
 
 			c.mu.Lock()
-
+			
 			for userID, stocks := range c.subs {
 
 				for ins, last := range stocks {
@@ -181,4 +185,4 @@ func randomTick(ins instrument, last *Tick) *Tick {
 
 func round2(v float64) float64 {
 	return math.Round(v*100) / 100
-}
+} 

@@ -90,7 +90,7 @@ func (h *Hub) ServeWS(
 
 	tokenString := r.URL.Query().Get("token")
 
-	userID, ok := validateToken(tokenString, secret)
+	userID, ok := validateToken(tokenString, secret) //validates the token and extracts user_id
 
 	if !ok {
 		http.Error(

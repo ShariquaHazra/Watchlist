@@ -11,7 +11,7 @@ type Handler struct {
 	service *Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service *Service) *Handler {// called from main.go to create auth handler
 	return &Handler{service: service}
 }
 
@@ -20,7 +20,7 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
-
+ 
 // POST /api/auth/register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest

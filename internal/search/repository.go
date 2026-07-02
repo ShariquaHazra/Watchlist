@@ -18,10 +18,21 @@ func (r *Repository) SearchStocks(query string) ([]models.Stock, error) {
 
 	rows, err := r.db.Query(`
 		SELECT id, symbol, company_name, exchange, ltp, last_updated
-		FROM stocks
-		WHERE symbol ILIKE $1 OR company_name ILIKE $1
-		LIMIT 20
-	`, query)
+FROM stocks
+WHERE
+    symbol ILIKE $1
+    OR company_name ILIKE $1
+ORDER BY
+CASE
+    WHEN LOWER(symbol) = LOWER($2) THEN 1
+    WHEN LOWER(symbol) LIKE LOWER($2 || '%') THEN 2
+    WHEN LOWER(company_name) LIKE LOWER($2 || '%') THEN 3
+    ELSE 4
+END,
+symbol
+LIMIT 20;
+
+	`, query, query)
 
 	if err != nil {
 		return nil, err
