@@ -15,21 +15,27 @@ func Connect(connStr string) *sql.DB {
 
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Database open error:", err)
 	}
 
 	if err := db.Ping(); err != nil {
-		log.Fatal(err)
+		log.Fatal("Database ping error:", err)
 	}
 
 	log.Println("Database connected successfully")
 
-	// AUTO RUN MIGRATIONS
-	if err := RunMigrations(db); err != nil {
-		log.Fatal("Migration failed:", err)
-	}
+	// Run migrations automatically
+	err = RunMigrations(connStr)
+	if err != nil {
+		log.Printf("Migration failed: %v", err)
 
-	log.Println("Migrations completed successfully")
+		// optional:
+		// comment below if you want app to stop on migration error
+		// log.Fatal(err)
+
+	} else {
+		log.Println("Migrations completed successfully")
+	}
 
 	return db
 }

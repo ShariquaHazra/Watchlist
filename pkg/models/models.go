@@ -46,6 +46,32 @@ type Stock struct {
 	LastUpdated           time.Time `json:"last_updated"`
 }
 
+
+// ── Session Control (1 mobile + 1 desktop per user) ───
+const (
+	DeviceMobile  = "mobile"
+	DeviceDesktop = "desktop"
+)
+ 
+type UserSession struct {
+	ID         int       `json:"id"`
+	UserID     int       `json:"user_id"`
+	DeviceType string    `json:"device_type"`
+	SessionID  string    `json:"session_id"`
+	DeviceInfo string    `json:"device_info,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+
+// SessionInfo — client-facing version, session_id (secret) exposed nahi karta
+type SessionInfo struct {
+	DeviceType string    `json:"device_type"`
+	DeviceInfo string    `json:"device_info,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+}
+ 
+
 type Watchlist struct {
 	ID         int       `json:"id"`
 	UserID     int       `json:"user_id"`
@@ -67,11 +93,15 @@ type RegisterRequest struct {
 	Name     string `json:"name"     validate:"required,min=2,max=50,no_only_spaces,valid_name"`
 	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8,max=100,strong_password"`
+	// Optional — agar client explicitly bhejna chahe. Warna User-Agent se auto-detect hoga.
+	DeviceType string `json:"device_type" validate:"omitempty,oneof=mobile desktop"`
 }
-
+ 
 type LoginRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required"`
+	// Optional — agar client explicitly bhejna chahe. Warna User-Agent se auto-detect hoga.
+	DeviceType string `json:"device_type" validate:"omitempty,oneof=mobile desktop"`
 }
 
 type CreateWatchlistRequest struct {

@@ -34,7 +34,7 @@ func NewService(secret string) *Service {//called from main.go to create market 
 }
 
 func (s *Service) Start() {// Starts the market service by running the hub and starting the client.
-	go s.hub.run()
+	go s.hub.run()//Hub ko new goroutine me runv
 	s.client.Start()
 	log.Println("[market] service started")
 }
@@ -222,18 +222,3 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 		},
 	)
 }
-
-// func (c *Client) Unsubscribe(userID int, instruments []instrument) {
-// 	c.mu.Lock()
-// 	defer c.mu.Unlock()
-
-// 	userStocks, exists := c.subs[userID]
-
-// 	if !exists {
-// 		return
-// 	}
-
-// 	for _, ins := range instruments {
-// 		delete(userStocks, ins)
-// 	}
-// }

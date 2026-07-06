@@ -33,8 +33,7 @@ func (r *Repository) SearchStocks(query string) ([]models.Stock, error) {
             END,
             symbol
         LIMIT 20
-    `, likeQuery, search)
-
+    `, likeQuery, search)//values passed
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +43,6 @@ func (r *Repository) SearchStocks(query string) ([]models.Stock, error) {
 
 	for rows.Next() {
 		var s models.Stock
-
 		err := rows.Scan(
 			&s.ID,
 			&s.Symbol,

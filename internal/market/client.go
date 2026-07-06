@@ -38,9 +38,9 @@ type tickEnvelope struct {
 }
 
 type Client struct {
-	mu sync.Mutex
-	subs map[int]map[instrument]*Tick
-	stop chan struct{}
+	mu sync.Mutex //Ek time par sirf ek goroutine ko shared data access karne dena
+	subs map[int]map[instrument]*Tick//subscription storage 
+	stop chan struct{}//Background goroutine ko stop signal dena
 	hub *Hub
 }
 

@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -19,7 +21,9 @@ func NewService(repo *Repository, jwtSecret string) *Service {
 	return &Service{repo: repo, jwtSecret: jwtSecret}
 }
 
-func (s *Service) Register(req *models.RegisterRequest) (*models.AuthResponse, error) {
+// userAgent: request ka User-Agent header — device-type auto-detect ke liye
+// (agar req.DeviceType explicitly bheja gaya ho to wahi priority lega)
+func (s *Service) Register(req *models.RegisterRequest, userAgent string) (*models.AuthResponse, error) {
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	req.Name = strings.TrimSpace(req.Name)
@@ -51,19 +55,11 @@ func (s *Service) Register(req *models.RegisterRequest) (*models.AuthResponse, e
 		return nil, err
 	}
 
-	// 4. generate token
-	token, err := s.generateToken(user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.AuthResponse{
-		Token: token,
-		User:  *user,
-	}, nil
+	// 4. session banao + token generate karo
+	return s.issueSessionAndToken(user, req.DeviceType, userAgent)
 }
 
-func (s *Service) Login(req *models.LoginRequest) (*models.AuthResponse, error) {
+func (s *Service) Login(req *models.LoginRequest, userAgent string) (*models.AuthResponse, error) {
 
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
@@ -77,7 +73,66 @@ func (s *Service) Login(req *models.LoginRequest) (*models.AuthResponse, error) 
 		return nil, errors.New("invalid email or password")
 	}
 
-	token, err := s.generateToken(user.ID)
+	// Naya login — session banao (isse purana same-device-type session
+	// automatically invalid ho jayega, kyunki DB row overwrite hoti hai)
+	return s.issueSessionAndToken(user, req.DeviceType, userAgent)
+}
+
+// Logout: is device_type ka session hata deta hai + uska jti blacklist mein daal deta
+// hai — token ab turant invalid hai, chahe uska "exp" abhi door ho
+func (s *Service) Logout(userID int, deviceType string) error {
+	return s.repo.DeleteSession(userID, deviceType)
+}
+
+// ListSessions: user ke saare active sessions (mobile + desktop) — remote-session view ke liye
+func (s *Service) ListSessions(userID int) ([]models.SessionInfo, error) {
+	sessions, err := s.repo.GetUserSessions(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]models.SessionInfo, 0, len(sessions))
+	for _, sess := range sessions {
+		result = append(result, models.SessionInfo{
+			DeviceType: sess.DeviceType,
+			DeviceInfo: sess.DeviceInfo,
+			CreatedAt:  sess.CreatedAt,
+			LastSeenAt: sess.LastSeenAt,
+		})
+	}
+	return result, nil
+}
+
+// RevokeSession: kisi bhi device_type (mobile/desktop) ka session force-logout karta hai —
+// "logout from other device" jaisa remote-logout feature ke liye. Blacklist mein bhi jti
+// daal deta hai taaki wo token turant reject ho, active-session-row delete hone ke bawajood
+// bhi agar attacker ke paas old token ho.
+func (s *Service) RevokeSession(userID int, deviceType string) error {
+	if deviceType != models.DeviceMobile && deviceType != models.DeviceDesktop {
+		return errors.New("invalid device_type — must be 'mobile' or 'desktop'")
+	}
+	return s.repo.DeleteSession(userID, deviceType)
+}
+
+// ── Helpers: device detection, session id, token ──────────────────
+
+func (s *Service) issueSessionAndToken(user *models.User, explicitDeviceType, userAgent string) (*models.AuthResponse, error) {
+	deviceType := explicitDeviceType
+	if deviceType == "" {
+		deviceType = detectDeviceType(userAgent)
+	}
+
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return nil, err
+	}
+
+	// Purana session (agar isi device_type ka hai) yahan replace ho jayega
+	if err := s.repo.UpsertSession(user.ID, deviceType, sessionID, userAgent); err != nil {
+		return nil, err
+	}
+
+	token, err := s.generateToken(user.ID, sessionID, deviceType)
 	if err != nil {
 		return nil, err
 	}
@@ -85,11 +140,35 @@ func (s *Service) Login(req *models.LoginRequest) (*models.AuthResponse, error) 
 	return &models.AuthResponse{Token: token, User: *user}, nil
 }
 
-func (s *Service) generateToken(userID int) (string, error) {
-	claims := jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+// Simple User-Agent based heuristic — "mobile" keywords match nahi hue to desktop
+func detectDeviceType(userAgent string) string {
+	ua := strings.ToLower(userAgent)
+	mobileKeywords := []string{"mobile", "android", "iphone", "ipad", "ipod", "windows phone", "blackberry"}
+	for _, kw := range mobileKeywords {
+		if strings.Contains(ua, kw) {
+			return models.DeviceMobile
+		}
 	}
+	return models.DeviceDesktop
+}
+
+// Random session id — crypto/rand se, koi extra dependency ki zaroorat nahi
+func generateSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func (s *Service) generateToken(userID int, sessionID, deviceType string) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id":     userID,
+		"sid":         sessionID,
+		"device_type": deviceType,
+		"exp":         time.Now().Add(24 * time.Hour).Unix(),
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
 }

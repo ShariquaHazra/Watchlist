@@ -5,13 +5,15 @@ import (
 	"net/http"
 	"watchlist-backend/pkg/models"
 	"watchlist-backend/pkg/validator"
+
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
 	service *Service
 }
 
-func NewHandler(service *Service) *Handler {// called from main.go to create auth handler
+func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
@@ -20,7 +22,7 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
- 
+
 // POST /api/auth/register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
@@ -42,7 +44,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.service.Register(&req)
+	resp, err := h.service.Register(&req, r.Header.Get("User-Agent"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,
@@ -79,7 +81,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.service.Login(&req)
+	resp, err := h.service.Login(&req, r.Header.Get("User-Agent"))
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, models.Response{
 			Success: false,
@@ -92,5 +94,64 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "login successful",
 		Data:    resp,
+	})
+}
+
+// POST /api/auth/logout (protected — AuthMiddleware ke baad chalta hai)
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value("user_id").(int)
+	deviceType, _ := r.Context().Value("device_type").(string)
+
+	if err := h.service.Logout(userID, deviceType); err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.Response{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, models.Response{
+		Success: true,
+		Message: "logged out successfully",
+	})
+}
+
+// GET /api/auth/sessions (protected) — user ke saare active sessions (mobile + desktop)
+func (h *Handler) GetSessions(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value("user_id").(int)
+
+	sessions, err := h.service.ListSessions(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.Response{
+			Success: false,
+			Message: "failed to fetch sessions",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, models.Response{
+		Success: true,
+		Message: "active sessions fetched",
+		Data:    sessions,
+	})
+}
+
+// DELETE /api/auth/sessions/{device_type} (protected) — remote-logout ek specific
+// device_type (mobile/desktop) se, chahe wo request khud us device se aayi ho ya kisi aur se
+func (h *Handler) DeleteSessionByType(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value("user_id").(int)
+	deviceType := mux.Vars(r)["device_type"]
+
+	if err := h.service.RevokeSession(userID, deviceType); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.Response{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, models.Response{
+		Success: true,
+		Message: deviceType + " session revoked successfully",
 	})
 }

@@ -9,8 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/gorilla/mux" // HTTP router — matches URLs to handlers
-
+	"github.com/gorilla/mux" 
 	"watchlist-backend/config"
 	"watchlist-backend/internal/auth"
 	csvhandler "watchlist-backend/internal/csv"
@@ -45,7 +44,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
-		next.ServeHTTP(sw, r)//call actual handler
+		next.ServeHTTP(sw, r)
 
 		log.Printf("[MUX] %s | %3d | %13v | %15s | %-7s %q",
 			time.Now().Format("2006/01/02 - 15:04:05"),
@@ -68,6 +67,21 @@ func main() {
 	authRepo := auth.NewRepository(dbConn)
 	authService := auth.NewService(authRepo, cfg.JWTSecret)
 	authHandler := auth.NewHandler(authService)
+
+	// go func() {
+	// 	ticker := time.NewTicker(1 * time.Hour)
+	// 	defer ticker.Stop()
+	// 	for range ticker.C {
+	// 		deleted, err := authRepo.CleanupExpiredRevokedTokens()
+	// 		if err != nil {
+	// 			log.Println("revoked_tokens cleanup failed:", err)
+	// 			continue
+	// 		}
+	// 		if deleted > 0 {
+	// 			log.Printf("revoked_tokens cleanup: removed %d expired entries\n", deleted)
+	// 		}
+	// 	}
+	// }()
 
 	// ── Watchlist ────────────────────
 	watchlistRepo := watchlist.NewRepository(dbConn)
@@ -156,7 +170,12 @@ func main() {
 
 	// ── Protected APIs ───────────────
 	protected := api.NewRoute().Subrouter()
-	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret, dbConn))
+
+
+	protected.HandleFunc("/auth/logout", authHandler.Logout).Methods("POST")
+	protected.HandleFunc("/auth/sessions", authHandler.GetSessions).Methods("GET")
+	protected.HandleFunc("/auth/sessions/{device_type}", authHandler.DeleteSessionByType).Methods("DELETE")
 
 	protected.HandleFunc("/watchlists", watchlistHandler.Create).Methods("POST")
 	protected.HandleFunc("/watchlists", watchlistHandler.GetAll).Methods("GET")

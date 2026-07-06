@@ -37,7 +37,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validation
+	//yeh json body validation ke liye hai, agar koi field missing ya invalid ho toh error return karega
 	if errs := validator.Validate(req); len(errs) > 0 {
 		writeJSON(w, http.StatusBadRequest, models.Response{
 			Success: false,

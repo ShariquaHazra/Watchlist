@@ -88,7 +88,6 @@ func (s *Service) RemoveStock(userID, watchlistID, stockID int) error {
 	return s.repo.RemoveStock(watchlistID, stockID)
 }
 
-// String to Int helper
 func ParseInt(s string) (int, error) {
 	val, err := strconv.Atoi(s)
 	if err != nil {
