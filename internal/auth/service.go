@@ -81,7 +81,7 @@ func (s *Service) Login(req *models.LoginRequest, userAgent string) (*models.Aut
 // Logout: is device_type ka session hata deta hai + uska jti blacklist mein daal deta
 // hai — token ab turant invalid hai, chahe uska "exp" abhi door ho
 func (s *Service) Logout(userID int, deviceType string) error {
-	return s.repo.DeleteSession(userID, deviceType)
+	return s.repo.RevokeAndDeleteSession(userID, deviceType)
 }
 
 // ListSessions: user ke saare active sessions (mobile + desktop) — remote-session view ke liye
@@ -111,7 +111,7 @@ func (s *Service) RevokeSession(userID int, deviceType string) error {
 	if deviceType != models.DeviceMobile && deviceType != models.DeviceDesktop {
 		return errors.New("invalid device_type — must be 'mobile' or 'desktop'")
 	}
-	return s.repo.DeleteSession(userID, deviceType)
+	return s.repo.RevokeAndDeleteSession(userID, deviceType)
 }
 
 // ── Helpers: device detection, session id, token ──────────────────
@@ -165,10 +165,10 @@ func (s *Service) generateToken(userID int, sessionID, deviceType string) (strin
 	claims := jwt.MapClaims{
 		"user_id":     userID,
 		"sid":         sessionID,
+		"jti":         sessionID, // JWT ID — revocation blacklist ke liye unique identifier
 		"device_type": deviceType,
 		"exp":         time.Now().Add(24 * time.Hour).Unix(),
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.jwtSecret))
 }

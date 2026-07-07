@@ -105,7 +105,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.Logout(userID, deviceType); err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.Response{
 			Success: false,
-			Message: err.Error(),
+			Message: "logout failed",
 		})
 		return
 	}

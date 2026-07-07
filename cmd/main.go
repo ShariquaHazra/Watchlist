@@ -68,21 +68,21 @@ func main() {
 	authService := auth.NewService(authRepo, cfg.JWTSecret)
 	authHandler := auth.NewHandler(authService)
 
-	// go func() {
-	// 	ticker := time.NewTicker(1 * time.Hour)
-	// 	defer ticker.Stop()
-	// 	for range ticker.C {
-	// 		deleted, err := authRepo.CleanupExpiredRevokedTokens()
-	// 		if err != nil {
-	// 			log.Println("revoked_tokens cleanup failed:", err)
-	// 			continue
-	// 		}
-	// 		if deleted > 0 {
-	// 			log.Printf("revoked_tokens cleanup: removed %d expired entries\n", deleted)
-	// 		}
-	// 	}
-	// }()
-
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			deleted, err := authRepo.CleanupExpiredRevokedTokens()
+			if err != nil {
+				log.Println("revoked_tokens cleanup failed:", err)
+				continue
+			}
+			if deleted > 0 {
+				log.Printf("revoked_tokens cleanup: removed %d expired entries\n", deleted)
+			}
+		}
+	}()
+	
 	// ── Watchlist ────────────────────
 	watchlistRepo := watchlist.NewRepository(dbConn)
 	watchlistService := watchlist.NewService(watchlistRepo)
