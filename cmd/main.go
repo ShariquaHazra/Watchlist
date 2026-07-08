@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux" 
 	"watchlist-backend/config"
+	"watchlist-backend/internal/admin"
 	"watchlist-backend/internal/auth"
 	csvhandler "watchlist-backend/internal/csv"
 	"watchlist-backend/internal/db"
@@ -63,6 +64,8 @@ func main() {
 	dbConn := db.Connect(cfg.DatabaseURL)//Ye database se connection banata hai.
 	defer dbConn.Close()
 
+	
+
 	// ── Auth ─────────────────────────
 	authRepo := auth.NewRepository(dbConn)
 	authService := auth.NewService(authRepo, cfg.JWTSecret)
@@ -82,7 +85,7 @@ func main() {
 			}
 		}
 	}()
-	
+
 	// ── Watchlist ────────────────────
 	watchlistRepo := watchlist.NewRepository(dbConn)
 	watchlistService := watchlist.NewService(watchlistRepo)
@@ -176,6 +179,19 @@ func main() {
 	protected.HandleFunc("/auth/logout", authHandler.Logout).Methods("POST")
 	protected.HandleFunc("/auth/sessions", authHandler.GetSessions).Methods("GET")
 	protected.HandleFunc("/auth/sessions/{device_type}", authHandler.DeleteSessionByType).Methods("DELETE")
+
+	// ── Admin-only APIs ──────────────
+	adminService := admin.NewService(authRepo)
+	adminHandler := admin.NewHandler(adminService)
+
+	adminRoutes := api.NewRoute().Subrouter()
+	adminRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret, dbConn))
+	adminRoutes.Use(middleware.AdminMiddleware(dbConn))
+
+	adminRoutes.HandleFunc("/admin/users/{userID}/sessions/{deviceType}", adminHandler.RevokeUserSession).Methods("DELETE")
+	adminRoutes.HandleFunc("/admin/users/{userID}/sessions", adminHandler.RevokeAllSessions).Methods("DELETE")
+	adminRoutes.HandleFunc("/admin/users/{userID}/block", adminHandler.BlockUser).Methods("PUT")
+    adminRoutes.HandleFunc("/admin/users/{userID}/unblock", adminHandler.UnblockUser).Methods("PUT")
 
 	protected.HandleFunc("/watchlists", watchlistHandler.Create).Methods("POST")
 	protected.HandleFunc("/watchlists", watchlistHandler.GetAll).Methods("GET")

@@ -102,7 +102,7 @@ func (h *Hub) ServeWS(
 	}
 
 	conn, err := upgrader.Upgrade(
-		w,
+		w,  
 		r,
 		nil,
 	)
@@ -153,37 +153,26 @@ func (c *wsClient) read() {
 	}
 }
 
-func validateToken(
-	tokenString string,
-	secret string,
-)(int,bool){
-
+func validateToken(tokenString string,secret string,)(int,bool){
 	token, err := jwt.Parse(
 		tokenString,
-
 		func(token *jwt.Token)(interface{},error){
-
 			if _,ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-
 				return nil, fmt.Errorf(
 					"invalid signing method",
 				)
 			}
-
 			return []byte(secret),nil
 		},
 	)
-
 	if err != nil || !token.Valid {
 		return 0,false
 	}
-
 	claims,ok := token.Claims.(jwt.MapClaims)
 
 	if !ok {
 		return 0,false
 	}
-
 	id,ok := claims["user_id"].(float64)
 
 	if !ok {

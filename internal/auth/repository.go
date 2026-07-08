@@ -27,8 +27,9 @@ func (r *Repository) CreateUser(user *models.User, passwordHash string) error {
 }
 
 func (r *Repository) GetUserByEmail(email string) (*models.User, string, error) {
+
 	query := `
-		SELECT id, name, email, password_hash, created_at
+		SELECT id, name, email, password_hash, is_blocked, created_at
 		FROM users
 		WHERE email = $1
 	`
@@ -41,6 +42,7 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, string, error) 
 		&user.Name,
 		&user.Email,
 		&passwordHash,
+		&user.IsBlocked,
 		&user.CreatedAt,
 	)
 
@@ -55,7 +57,6 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, string, error) 
 	return user, passwordHash, nil
 }
 
-// ── Session Control (1 mobile + 1 desktop per user) ───────────────
 
 // UpsertSession: naya login hote hi is user+device_type ka purana session
 // row REPLACE ho jata hai — isi se purana session automatically invalid ho jata hai.
@@ -172,13 +173,79 @@ func (r *Repository) IsTokenRevoked(jti string) (bool, error) {
 	return revoked, err
 }
 
-// CleanupExpiredRevokedTokens: scheduled job isko periodically call karega taaki
-// table chhota/efficient rahe — jin tokens ki natural expiry beet chuki hai, unhe
-// blacklist mein rakhne ka koi fayda nahi (wo waise hi ab invalid ho chuke hain)
 func (r *Repository) CleanupExpiredRevokedTokens() (int64, error) {
 	result, err := r.db.Exec(`DELETE FROM revoked_tokens WHERE expires_at < NOW()`)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+func (r *Repository) RevokeAllSessions(userID int) error {
+
+	rows, err := r.db.Query(
+		`SELECT jti, created_at FROM user_sessions WHERE user_id = $1`,
+		userID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type session struct {
+		jti string
+		t   time.Time
+	}
+
+	var sessions []session
+
+	for rows.Next() {
+		var s session
+
+		if err := rows.Scan(&s.jti, &s.t); err != nil {
+			return err
+		}
+
+		sessions = append(sessions, s)
+	}
+
+	for _, s := range sessions {
+
+		expires := s.t.Add(24 * time.Hour)
+
+		_, err := r.db.Exec(
+			`INSERT INTO revoked_tokens(jti,user_id,expires_at)
+			 VALUES($1,$2,$3)
+			 ON CONFLICT(jti) DO NOTHING`,
+			s.jti,
+			userID,
+			expires,
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = r.db.Exec(
+		`DELETE FROM user_sessions WHERE user_id = $1`,
+		userID,
+	)
+
+	return err
+}
+func (r *Repository) BlockUser(userID int) error {
+	_, err := r.db.Exec(
+		`UPDATE users SET is_blocked = TRUE WHERE id = $1`,
+		userID,
+	)
+	return err
+}
+
+func (r *Repository) UnblockUser(userID int) error {
+	_, err := r.db.Exec(
+		`UPDATE users SET is_blocked = FALSE WHERE id = $1`,
+		userID,
+	)
+	return err
 }

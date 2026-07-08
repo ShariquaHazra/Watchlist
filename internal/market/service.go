@@ -34,7 +34,7 @@ func NewService(secret string) *Service {//called from main.go to create market 
 }
 
 func (s *Service) Start() {// Starts the market service by running the hub and starting the client.
-	go s.hub.run()//Hub ko new goroutine me runv
+	go s.hub.run()//Hub ko new goroutine me run
 	s.client.Start()
 	log.Println("[market] service started")
 }
